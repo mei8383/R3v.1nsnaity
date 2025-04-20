@@ -1,85 +1,86 @@
+import os
 import requests
 from datetime import datetime
+from dotenv import load_dotenv
 
-# Replace these with your actual API keys
-HELIUS_API_KEY = '2a0818be-6981-48c5-b228-048294a1134a'
-BIRDEYE_API_KEY = 'abfa609c4d9542129fbe5c77c4c35e4a'
+# Load environment variables from .env file
+load_dotenv()
 
-# Helius API endpoint to get wallet transactions
+# Access API keys securely
+HELIUS_API_KEY = os.getenv('HELIUS_API_KEY')
+BIRDEYE_API_KEY = os.getenv('BIRDEYE_API_KEY')
+
+# Helius and Birdeye API URLs
 HELIUS_API_URL = 'https://api.helius.xyz/v1/transactions'
-
-# Birdeye API endpoint to get token price
 BIRDEYE_API_URL = 'https://api.birdeye.so/v1/price'
 
 # Function to get wallet transactions from Helius
 def get_wallet_transactions(wallet_address):
     url = f'{HELIUS_API_URL}/{wallet_address}'
     headers = {'Authorization': f'Bearer {HELIUS_API_KEY}'}
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code == 200:
-        return response.json()['data']
-    else:
-        print(f"Error fetching Helius transactions: {response.status_code}")
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise an error for bad HTTP responses
+        return response.json().get('data', [])
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Helius transactions: {e}")
         return []
 
 # Function to get token price from Birdeye
 def get_token_price(token_symbol, timestamp):
-    # Convert timestamp to the format Birdeye expects
-    timestamp = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ').timestamp()
-    
-    params = {
-        'symbol': token_symbol,
-        'timestamp': int(timestamp),
-        'apiKey': BIRDEYE_API_KEY
-    }
-    
-    response = requests.get(BIRDEYE_API_URL, params=params)
-    
-    if response.status_code == 200:
+    try:
+        # Convert timestamp to the format Birdeye expects
+        timestamp = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ').timestamp()
+        params = {
+            'symbol': token_symbol,
+            'timestamp': int(timestamp),
+            'apiKey': BIRDEYE_API_KEY
+        }
+        response = requests.get(BIRDEYE_API_URL, params=params)
+        response.raise_for_status()  # Raise an error for bad HTTP responses
         data = response.json()
-        if 'price' in data:
-            return float(data['price'])
-        else:
-            print(f"No price data for {token_symbol} at {timestamp}")
-            return None
-    else:
-        print(f"Error fetching Birdeye price data: {response.status_code}")
+        return float(data['price']) if 'price' in data else None
+    except ValueError as ve:
+        print(f"Invalid timestamp format: {ve}")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Birdeye price data: {e}")
         return None
 
-# Function to calculate profitability based on transactions
+# Function to calculate profitability from transactions
 def calculate_profit_from_transactions(wallet_address):
     transactions = get_wallet_transactions(wallet_address)
+    if not transactions:
+        print("No transactions found.")
+        return 0
+
     total_profit = 0
     total_spent = 0
 
     for tx in transactions:
-        token_symbol = tx['tokenSymbol']  # The token symbol (e.g., 'SOL', 'USDC')
-        direction = tx['direction']  # 'in' for buy, 'out' for sell
-        amount = float(tx['amount'])  # Amount of tokens involved
-        timestamp = tx['timestamp']  # Transaction timestamp
+        try:
+            token_symbol = tx['tokenSymbol']
+            direction = tx['direction']
+            amount = float(tx['amount'])
+            timestamp = tx['timestamp']
+            token_price = get_token_price(token_symbol, timestamp)
 
-        # Get the token price from Birdeye at the time of transaction
-        token_price = get_token_price(token_symbol, timestamp)
-        
-        if token_price is None:
-            continue  # If the price isn't available, skip this transaction
+            if token_price is None:
+                continue
 
-        transaction_value = amount * token_price  # Value of the transaction at the time
-        
-        # If it's a buy (token comes into the wallet)
-        if direction == 'in':
-            total_spent += transaction_value  # Add to total spent
-        # If it's a sell (token goes out of the wallet)
-        elif direction == 'out':
-            total_profit += transaction_value  # Add to total profit
+            transaction_value = amount * token_price
+            if direction == 'in':
+                total_spent += transaction_value
+            elif direction == 'out':
+                total_profit += transaction_value
+        except KeyError as ke:
+            print(f"Transaction data missing key: {ke}")
+            continue
 
-    # Calculate net profit
-    net_profit = total_profit - total_spent
-    return net_profit
+    return total_profit - total_spent
 
 # Example usage
 if __name__ == "__main__":
-    wallet_address = "your_wallet_address_here"  # Replace with the actual wallet address
+    wallet_address = input("your_wallet_address_here") # Replace with your wallet address
     profit = calculate_profit_from_transactions(wallet_address)
     print(f"Net Profit: {profit}")
