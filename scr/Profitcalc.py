@@ -2,7 +2,7 @@ import os
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
-
+from dotreplit import load_dotreplit
 # Load environment variables from .env file
 load_dotenv()
 
