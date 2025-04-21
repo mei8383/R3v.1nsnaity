@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from dotreplit import load_dotreplit
 # Load environment variables from .env file
 load_dotenv()
-
+load_dotreplit()
 # Access API keys securely
 HELIUS_API_KEY = os.getenv('HELIUS_API_KEY')
 BIRDEYE_API_KEY = os.getenv('BIRDEYE_API_KEY')
