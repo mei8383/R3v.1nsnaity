@@ -1,1 +1,1 @@
-run='python Profitcalc.py'
+run='python scr/Profitcalc.py'
